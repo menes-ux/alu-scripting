@@ -1,20 +1,70 @@
 #!/usr/bin/python3
-"""" Top Ten Limit"""
+"""
+Queries the Reddit API and prints the titles of the first 10 hot posts
+for a given subreddit.
+"""
 import requests
+import sys
 
 
 def top_ten(subreddit):
-    """"top ten"""
-    url = "https://www.reddit.com/r/{}/hot.json?limit=10" \
-        .format(subreddit)
+    """
+    Prints the titles of the first 10 hot posts for a given subreddit.
+    If the subreddit is invalid, prints None.
+    """
+    # The simpler URL format is often preferred, with limit in the query string
+    url = f"https://www.reddit.com/r/{subreddit}/hot.json"
 
-    res = requests.get(url,
-                       headers={
-                           'User-Agent': 'Mozilla/5.0'})
+    # IMPORTANT: Reverting to the previously successful User-Agent, 
+    # as Reddit often blocks unauthenticated requests with unknown or generic headers.
+    headers = {
+        'User-Agent': 'PostmanRuntime/7.35.0'
+    }
 
-    if res.status_code != 200:
+    # Parameters to request exactly 10 posts
+    params = {
+        'limit': 10
+    }
+
+    try:
+        # Request the data, disable redirects
+        response = requests.get(
+            url,
+            headers=headers,
+            params=params,
+            allow_redirects=False,
+            timeout=10  # Increased timeout for robustness
+        )
+
+        # 1. Check for invalid subreddit (404, or 302 redirect)
+        if response.status_code >= 300:
+            print(None)
+            return
+
+        # 2. Status code is 200 OK. Now safely parse JSON.
+        data = response.json()
+        
+        # Navigate to the list of posts (children)
+        posts = data.get('data', {}).get('children', [])
+
+        # 3. Print the titles
+        for post in posts:
+            title = post.get('data', {}).get('title')
+            if title:
+                print(title)
+
+    except requests.exceptions.RequestException:
+        # Catch network/connection-specific errors.
         print(None)
+        return
+    except Exception:
+        # Catch any remaining unexpected JSON/parsing errors 
+        # (e.g., if the structure changes).
+        print(None)
+        return
+
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print("Please pass an argument for the subreddit to search.")
     else:
-        json_response = res.json()
-        posts = json_response.get('data').get('children')
-        [print(post.get('data').get('title')) for post in posts]
+        top_ten(sys.argv[1])
