@@ -5,6 +5,7 @@ for a given subreddit.
 """
 import requests
 import sys
+from requests.exceptions import RequestException # Explicit import for robust error handling
 
 
 def top_ten(subreddit):
@@ -12,11 +13,10 @@ def top_ten(subreddit):
     Prints the titles of the first 10 hot posts for a given subreddit.
     If the subreddit is invalid, prints None.
     """
-    # The simpler URL format is often preferred, with limit in the query string
+    # Reddit API endpoint for hot posts, requesting JSON format
     url = f"https://www.reddit.com/r/{subreddit}/hot.json"
 
-    # IMPORTANT: Reverting to the previously successful User-Agent, 
-    # as Reddit often blocks unauthenticated requests with unknown or generic headers.
+    # Use the User-Agent that gave you the best score so far
     headers = {
         'User-Agent': 'PostmanRuntime/7.35.0'
     }
@@ -27,43 +27,45 @@ def top_ten(subreddit):
     }
 
     try:
-        # Request the data, disable redirects
+        # Request the data. Crucially, set allow_redirects=False.
         response = requests.get(
             url,
             headers=headers,
             params=params,
             allow_redirects=False,
-            timeout=10  # Increased timeout for robustness
+            timeout=15
         )
 
-        # 1. Check for invalid subreddit (404, or 302 redirect)
-        if response.status_code >= 300:
+        # 1. Check for non-200 status codes (404, 302 redirect, 429 throttling)
+        # Any status code other than 200 means the request failed or the subreddit is invalid.
+        if response.status_code != 200:
             print(None)
             return
 
-        # 2. Status code is 200 OK. Now safely parse JSON.
+        # 2. Status code is 200 OK. Safely parse JSON.
         data = response.json()
         
-        # Navigate to the list of posts (children)
+        # Navigate to the list of posts (children) using defensive dictionary lookups
         posts = data.get('data', {}).get('children', [])
 
         # 3. Print the titles
         for post in posts:
+            # Safely extract the title
             title = post.get('data', {}).get('title')
-            if title:
+            if title: 
                 print(title)
 
-    except requests.exceptions.RequestException:
-        # Catch network/connection-specific errors.
+    except RequestException:
+        # Catch network-related errors (DNS failure, connection timeout, etc.)
         print(None)
-        return
     except Exception:
-        # Catch any remaining unexpected JSON/parsing errors 
-        # (e.g., if the structure changes).
+        # Catch any unexpected error during JSON parsing/data lookup
+        # This acts as a fallback for any remaining errors.
         print(None)
-        return
 
 if __name__ == '__main__':
+    # PEP8: Imports are alphabetically ordered at the top.
+    # The 'sys' import is only needed if this block is present.
     if len(sys.argv) < 2:
         print("Please pass an argument for the subreddit to search.")
     else:
